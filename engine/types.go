@@ -11,14 +11,12 @@ type ParseResult struct {
 }
 
 type Article struct {
-	Heading  string
-	Contents []Content
+	Heading, Summary string
+	Contents         []Content
 }
 
 type Content struct {
-	Paragraph, Summary, ImageUrl string
-	IsImage                      bool
-	Lists                        []string
+	Type, Paragraph, ImageUrl string
 }
 
 func NilParser(contents []byte) ParseResult {
