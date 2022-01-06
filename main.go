@@ -3,8 +3,10 @@ package main
 import (
 	"GO-CRAWLER/bbc/parser"
 	"GO-CRAWLER/engine"
+	"GO-CRAWLER/scheduler"
 )
 
 func main() {
-	engine.Run(engine.Request{Url: "https://www.bbc.com/news", ParserFunc: parser.ParseArticleList})
+	e := engine.Engine{Scheduler: &scheduler.Scheduler{}}
+	e.Run(engine.Request{Url: "https://www.bbc.com/news", ParserFunc: parser.ParseArticleList})
 }

@@ -5,32 +5,92 @@ import (
 	"fmt"
 )
 
-func Run(seeds ...Request) {
-	var requests []Request
+type Engine struct {
+	Scheduler Scheduler
+}
 
-	// Append seeds to the request queue
-	requests = append(requests, seeds...)
+type Scheduler interface {
+	Submit(Request)
+	ConfigureScheduler(chan Request)
+}
 
-	// Looping request queue, fetch the content and give to the parser
-	for len(requests) > 0 {
-		r := requests[0]
-		requests = requests[1:]
-		body, err := fetcher.Fetch(r.Url)
+const initializeWorkerCount = 10
 
-		fmt.Println("URL:", r.Url)
+func (e Engine) Run(seeds ...Request) {
+	in := make(chan Request)
+	out := make(chan ParseResult)
+	e.Scheduler.ConfigureScheduler(in)
 
-		if err != nil {
-			fmt.Printf("Error occurred: %s", err)
-			continue
+	for i := 0; i < initializeWorkerCount; i++ {
+		createWorker(in, out)
+	}
+
+	for _, r := range seeds {
+		if !isDuplicated(r.Url) {
+			e.Scheduler.Submit(r)
 		}
+		// else {
+		// 	fmt.Println("Duplicated URL:", r.Url)
+		// }
+	}
 
-		parseRequest := r.ParserFunc(body)
-		requests = append(requests, parseRequest.Requests...)
+	for {
+		result := <-out
 
-		for _, item := range parseRequest.Items {
-			fmt.Printf("Got item: %s", item)
-			fmt.Println()
+		for _, item := range result.Items {
+			if article, ok := item.(Article); ok {
+				fmt.Printf("Got article: %s", article.Heading)
+				fmt.Println()
+			} else {
+				fmt.Printf("Got item: %s", item)
+				fmt.Println()
+			}
+		}
+		for _, request := range result.Requests {
+			if !isDuplicated(request.Url) {
+				e.Scheduler.Submit(request)
+			}
+			// else {
+			// 	fmt.Println("Duplicated URL:", request.Url)
+			// }
 		}
 	}
 
+}
+
+func worker(r Request) (ParseResult, error) {
+	body, err := fetcher.Fetch(r.Url)
+
+	fmt.Println("URL:", r.Url)
+
+	if err != nil {
+		fmt.Printf("Error occurred: %s", err)
+
+		return ParseResult{}, err
+	}
+
+	return r.ParserFunc(body), nil
+}
+
+func createWorker(in chan Request, out chan ParseResult) {
+	go func() {
+		for {
+			request := <-in
+			result, err := worker(request)
+			if err != nil {
+				continue
+			}
+			out <- result
+		}
+	}()
+}
+
+var visitedURL = make(map[string]bool)
+
+func isDuplicated(url string) bool {
+	if visitedURL[url] {
+		return true
+	}
+	visitedURL[url] = true
+	return false
 }
